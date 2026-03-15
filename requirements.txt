@@ -1,0 +1,6 @@
+# Steam Speed Scanner Dependencies
+# Install with: pip install -r requirements.txt
+
+aiohttp>=3.9.0      # Async HTTP client for concurrent requests
+colorama>=0.4.6     # Cross-platform colored terminal output
+pyinstaller>=6.0    # For building standalone EXE (optional)
