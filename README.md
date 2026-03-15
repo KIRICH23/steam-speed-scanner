@@ -44,7 +44,7 @@ Steam Speed Scanner tests all Steam CDN (Content Delivery Network) regions world
 
 1. Go to [Releases](https://github.com/YOUR_USERNAME/steam-speed-scanner/releases)
 2. Download the latest `SteamSpeedScanner.exe`
-3. Run the executable
+3. Run file run_scanner.bat
 4. Wait for the scan to complete
 5. Press any key to exit
 
