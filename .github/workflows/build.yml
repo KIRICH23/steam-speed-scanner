@@ -2,6 +2,7 @@ name: Build EXE
 
 on:
   push:
+    branches: [main, master]
     tags:
       - 'v*'
   workflow_dispatch:
@@ -37,8 +38,9 @@ jobs:
         
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
-      with:
-        files: dist/SteamSpeedScanner.exe
+      shell: pwsh
+      run: |
+        gh release create ${{ github.ref_name }} --title "${{ github.ref_name }}" --generate-notes dist/SteamSpeedScanner.exe || `
+        gh release upload ${{ github.ref_name }} dist/SteamSpeedScanner.exe --clobber
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
