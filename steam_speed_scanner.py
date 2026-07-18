@@ -129,7 +129,7 @@ class UI:
 
 
 # Animation frames
-SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "", "⠴", "⠦", "⠧", "", "⠏"]
+SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠴", "⠦", "⠧", "⠏"]
 CHECK_MARK = "✓"
 CROSS_MARK = "✗"
 ROCKET = "🚀"
@@ -500,13 +500,30 @@ class SteamSpeedScanner:
             )[:10]
 
             for i, result in enumerate(latency_sorted, 1):
-                status = f"  [{get_color(f'{i}', Colors.CYAN)}/{get_color('10', Colors.CYAN)}] Testing {result.endpoint_name}..."
-                print(status, end="\r", flush=True)
+                done = False
+                start_t = time.perf_counter()
+
+                async def animate():
+                    frame_idx = 0
+                    while not done:
+                        elapsed = time.perf_counter() - start_t
+                        spinner = SPINNER_FRAMES[frame_idx % len(SPINNER_FRAMES)]
+                        line = f"  [{get_color(f'{i}', Colors.CYAN)}/{get_color('10', Colors.CYAN)}] {get_color(spinner, Colors.CYAN)} Testing {get_color(result.endpoint_name, Colors.WHITE)}  {get_color(f'{elapsed:4.0f}s', Colors.DIM)}"
+                        print(f"{line:<79}", end="\r", flush=True)
+                        frame_idx += 1
+                        await asyncio.sleep(0.1)
+
+                anim_task = asyncio.create_task(animate())
                 speed_result = await self.measure_real_speed(session, result.endpoint_name, result.url)
+                done = True
+                anim_task.cancel()
+                line = f"  [{get_color(f'{i}', Colors.CYAN)}/{get_color('10', Colors.CYAN)}] {get_color('✓', Colors.GREEN)} {result.endpoint_name:<34} {get_color(f'{speed_result.speed_mbps:>6.2f} Mbps', Colors.GREEN)}  {get_color(f'{speed_result.latency_ms:>6.0f}ms', Colors.BLUE)}"
+                print(f"{line:<79}", end="\r", flush=True)
                 for j, r in enumerate(self.results):
                     if r.endpoint_name == result.endpoint_name:
                         self.results[j] = speed_result
                         break
+            print()
 
         print(" " * 80 + "\r", end="", flush=True)
         measured = [r for r in self.results if r.status == "measured"]
