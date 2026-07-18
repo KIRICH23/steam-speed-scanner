@@ -645,29 +645,6 @@ class SteamSpeedScanner:
             print()
 
 
-def wait_for_keypress():
-    """Wait for user to press a key."""
-    import time
-    
-    try:
-        import msvcrt
-        print(f"\n  {get_color('═' * 60, Colors.GRAY)}")
-        print(f"  {get_color('Press any key to exit...', Colors.DIM + Colors.WHITE)}")
-        print(f"  {get_color('═' * 60, Colors.GRAY)}\n")
-        msvcrt.getch()
-        return
-    except Exception as e:
-        print(f"\n[Error: {e}]")
-    
-    # Fallback
-    print("\n  Closing in 30 seconds...")
-    for i in range(30, 0, -1):
-        print(f"\r  [{i} seconds remaining...]", end="", flush=True)
-        time.sleep(1)
-    print("\r  [Time's up!]          \n")
-    time.sleep(2)
-
-
 async def main():
     """Main entry point."""
     # Header
@@ -688,7 +665,15 @@ async def main():
     results = await scanner.scan_all_endpoints(concurrent=5)
     scanner.print_results()
     
-    wait_for_keypress()
+    print()
+    print(f"  {get_color('═' * 60, Colors.GRAY)}")
+    print(f"  {get_color('Press ENTER to exit...', Colors.DIM + Colors.WHITE)}")
+    print(f"  {get_color('═' * 60, Colors.GRAY)}")
+    try:
+        input()
+    except Exception:
+        import time
+        time.sleep(5)
     return scanner.results
 
 
@@ -699,11 +684,3 @@ if __name__ == "__main__":
         print(f"\n\n  {get_color('[Scan cancelled by user]', Colors.RED)}\n")
     except Exception as e:
         print(f"\n\n  {get_color(f'[ERROR: {e}]', Colors.RED)}\n")
-    finally:
-        try:
-            import msvcrt
-            print(f"\n  {get_color('[Press any key to exit...]', Colors.DIM)}")
-            msvcrt.getch()
-        except Exception:
-            import time
-            time.sleep(3)
