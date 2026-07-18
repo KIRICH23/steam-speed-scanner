@@ -10,6 +10,11 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 import sys
+import io
+
+# Set UTF-8 encoding for Windows console
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 # Initialize colorama for Windows console color support
 try:
@@ -326,6 +331,7 @@ class SteamSpeedScanner:
                 timeout=aiohttp.ClientTimeout(total=self.timeout_seconds),
                 allow_redirects=True
             ) as response:
+                await response.read()
                 latency_ms = (time.perf_counter() - start_time) * 1000
                 
                 return SpeedTestResult(
@@ -385,7 +391,7 @@ class SteamSpeedScanner:
             latency_ms=round(latency_ms, 2),
             success=True,
             status="latency",
-            error="Latency-only"
+            error=None
         )
 
     async def measure_real_speed(
@@ -394,20 +400,22 @@ class SteamSpeedScanner:
         name: str,
         base_url: str
     ) -> SpeedTestResult:
-        """Measure actual download speed using Cloudflare speed test."""
+        """Measure actual download speed using Steam CDN."""
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Accept": "*/*",
         }
 
         start_time = time.perf_counter()
-        latency_ms = 100
+        latency_ms = None
         try:
             async with session.get(
                 base_url,
                 headers=headers,
-                timeout=aiohttp.ClientTimeout(total=5)
+                timeout=aiohttp.ClientTimeout(total=5),
+                allow_redirects=True
             ) as response:
+                await response.read()
                 latency_ms = (time.perf_counter() - start_time) * 1000
         except Exception:
             pass
@@ -418,7 +426,8 @@ class SteamSpeedScanner:
                 async with session.get(
                     test_url,
                     headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=30)
+                    timeout=aiohttp.ClientTimeout(total=30),
+                    allow_redirects=True
                 ) as response:
                     if response.status == 200:
                         data = await response.read()
@@ -435,7 +444,7 @@ class SteamSpeedScanner:
                             endpoint_name=name,
                             url=base_url,
                             speed_mbps=round(speed_mbps, 2),
-                            latency_ms=round(latency_ms, 2),
+                            latency_ms=round(latency_ms or 0, 2),
                             success=True,
                             status="measured",
                             error=None
@@ -443,7 +452,17 @@ class SteamSpeedScanner:
             except Exception:
                 continue
 
-        return await self._latency_test(name, base_url, session, latency_ms)
+        if latency_ms is not None:
+            return await self._latency_test(name, base_url, session, latency_ms)
+        return SpeedTestResult(
+            endpoint_name=name,
+            url=base_url,
+            speed_mbps=0.0,
+            latency_ms=0.0,
+            success=False,
+            error="Could not measure latency or speed",
+            status="error"
+        )
 
     async def scan_all_endpoints(self, concurrent: int = 5) -> list[SpeedTestResult]:
         """Scan all CDN endpoints."""
@@ -471,26 +490,30 @@ class SteamSpeedScanner:
             ]
 
             self.results = await asyncio.gather(*limited_tasks)
-        
-        # Speed test for top 10 by latency
-        print(f"\n\n  {get_color('⚡', Colors.YELLOW)} {get_color('Testing real download speed for top 10 regions...', Colors.BOLD + Colors.CYAN)}\n")
-        
-        latency_sorted = sorted(
-            [r for r in self.results if r.success],
-            key=lambda x: x.latency_ms if x.latency_ms > 0 else float('inf')
-        )[:10]
-        
-        for i, result in enumerate(latency_sorted, 1):
-            status = f"  [{get_color(f'{i}', Colors.CYAN)}/{get_color('10', Colors.CYAN)}] Testing {result.endpoint_name}..."
-            print(status, end="\r", flush=True)
-            speed_result = await self.measure_real_speed(session, result.endpoint_name, result.url)
-            for j, r in enumerate(self.results):
-                if r.endpoint_name == result.endpoint_name:
-                    self.results[j] = speed_result
-                    break
-        
+
+            # Speed test for top 10 by latency
+            print(f"\n\n  {get_color('⚡', Colors.YELLOW)} {get_color('Testing real download speed for top 10 regions...', Colors.BOLD + Colors.CYAN)}\n")
+
+            latency_sorted = sorted(
+                [r for r in self.results if r.success],
+                key=lambda x: x.latency_ms if x.latency_ms > 0 else float('inf')
+            )[:10]
+
+            for i, result in enumerate(latency_sorted, 1):
+                status = f"  [{get_color(f'{i}', Colors.CYAN)}/{get_color('10', Colors.CYAN)}] Testing {result.endpoint_name}..."
+                print(status, end="\r", flush=True)
+                speed_result = await self.measure_real_speed(session, result.endpoint_name, result.url)
+                for j, r in enumerate(self.results):
+                    if r.endpoint_name == result.endpoint_name:
+                        self.results[j] = speed_result
+                        break
+
         print(" " * 80 + "\r", end="", flush=True)
-        self.results.sort(key=lambda x: x.speed_mbps, reverse=True)
+        measured = [r for r in self.results if r.status == "measured"]
+        estimated = [r for r in self.results if r.status != "measured"]
+        measured.sort(key=lambda x: x.speed_mbps, reverse=True)
+        estimated.sort(key=lambda x: x.speed_mbps, reverse=True)
+        self.results = measured + estimated
         return self.results
     
     def print_results(self):
