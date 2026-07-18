@@ -293,8 +293,9 @@ STEAM_CDN_ENDPOINTS = {
 }
 
 SPEED_TEST_URLS = [
-    "https://speed.cloudflare.com/__down?bytes=1048576",
-    "https://speed.cloudflare.com/__down?bytes=262144",
+    "https://speed.cloudflare.com/__down?bytes=104857600",
+    "https://speed.cloudflare.com/__down?bytes=52428800",
+    "https://speed.cloudflare.com/__down?bytes=10485760",
 ]
 
 
@@ -420,13 +421,14 @@ class SteamSpeedScanner:
         except Exception:
             pass
 
+        best_speed = 0.0
         for test_url in SPEED_TEST_URLS:
             try:
                 start_download = time.perf_counter()
                 async with session.get(
                     test_url,
                     headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=30),
+                    timeout=aiohttp.ClientTimeout(total=60),
                     allow_redirects=True
                 ) as response:
                     if response.status == 200:
@@ -440,17 +442,21 @@ class SteamSpeedScanner:
                         else:
                             speed_mbps = float('inf')
 
-                        return SpeedTestResult(
-                            endpoint_name=name,
-                            url=base_url,
-                            speed_mbps=round(speed_mbps, 2),
-                            latency_ms=round(latency_ms or 0, 2),
-                            success=True,
-                            status="measured",
-                            error=None
-                        )
+                        if speed_mbps > best_speed:
+                            best_speed = speed_mbps
             except Exception:
                 continue
+
+        if best_speed > 0:
+            return SpeedTestResult(
+                endpoint_name=name,
+                url=base_url,
+                speed_mbps=round(best_speed, 2),
+                latency_ms=round(latency_ms or 0, 2),
+                success=True,
+                status="measured",
+                error=None
+            )
 
         if latency_ms is not None:
             return await self._latency_test(name, base_url, session, latency_ms)
